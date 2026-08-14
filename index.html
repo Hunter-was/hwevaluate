@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Homework Evaluator</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f4f5;
+      color: #18181b;
+    }
+
+    header {
+      background: #18181b;
+      color: white;
+      padding: 22px 30px;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 30px 20px 50px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #d4d4d8;
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 390px;
+      resize: vertical;
+      border: 1px solid #a1a1aa;
+      border-radius: 8px;
+      padding: 14px;
+      font: 15px/1.55 Consolas, Monaco, monospace;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #18181b;
+      box-shadow: 0 0 0 2px rgba(24,24,27,.1);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 7px;
+      padding: 11px 17px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #evaluate {
+      background: #18181b;
+      color: white;
+    }
+
+    #clear {
+      background: #e4e4e7;
+      color: #18181b;
+    }
+
+    button:hover { opacity: .88; }
+
+    #output {
+      min-height: 390px;
+      white-space: pre-wrap;
+      background: #fafafa;
+      border: 1px solid #d4d4d8;
+      border-radius: 8px;
+      padding: 16px;
+      font: 15px/1.65 Consolas, Monaco, monospace;
+      overflow: auto;
+    }
+
+    .hint {
+      color: #71717a;
+      font-size: 13px;
+      margin-top: 9px;
+    }
+
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+      textarea, #output { min-height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <header>Homework Evaluator</header>
+
+  <main>
+    <div class="grid">
+      <section class="card">
+        <h2>Paste Homework</h2>
+        <textarea id="input" spellcheck="false" placeholder="pg. 8 #13-25 odd, 34-36, 41-51 odd, 58-61;
+pg. 18 #11-33 odd, 37, 39-40;
+pg. 24 #1-21 odd, 22"></textarea>
+
+        <div class="buttons">
+          <button id="evaluate">Evaluate</button>
+          <button id="clear">Clear</button>
+        </div>
+
+        <div class="hint">
+          Sections are separated by page numbers. Use ranges, individual questions, and “odd” ranges.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Result</h2>
+        <div id="output">Your evaluated homework will appear here.</div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const input = document.getElementById("input");
+    const output = document.getElementById("output");
+
+    function countQuestions(sectionText) {
+      // Remove page number / "#", then split into individual comma-separated instructions.
+      let text = sectionText
+        .replace(/^\s*pg\.?\s*\d+\s*#?/i, "")
+        .replace(/#/g, "")
+        .replace(/[.;]\s*$/, "")
+        .trim();
+
+      if (!text) return 0;
+
+      let total = 0;
+
+      for (let part of text.split(",")) {
+        part = part.trim();
+        if (!part) continue;
+
+        const odd = /\bodd\b/i.test(part);
+        part = part.replace(/\bodd\b/gi, "").trim();
+
+        // Find a range such as 13-25.
+        const range = part.match(/(\d+)\s*-\s*(\d+)/);
+
+        if (range) {
+          let start = Number(range[1]);
+          let end = Number(range[2]);
+
+          if (start > end) [start, end] = [end, start];
+
+          if (odd) {
+            // Count odd integers inclusively.
+            total += Math.floor((end + 1) / 2) - Math.floor(start / 2);
+          } else {
+            total += end - start + 1;
+          }
+        } else {
+          // Individual question number.
+          const number = part.match(/\b\d+\b/);
+          if (number) total++;
+        }
+      }
+
+      return total;
+    }
+
+    function parseHomework(text) {
+      // Each "pg. NUMBER" starts a new section.
+      const matches = [...text.matchAll(/(?:^|[;\n])\s*(pg\.?)\s*(\d+)\s*#?/gi)];
+
+      if (matches.length === 0) return [];
+
+      const sections = [];
+
+      for (let i = 0; i < matches.length; i++) {
+        const match = matches[i];
+        const page = match[2];
+
+        const start = match.index + match[0].length;
+        const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+
+        let instructions = text.slice(start, end)
+          .replace(/^[\s;]+/, "")
+          .replace(/[;\s]+$/, "")
+          .trim();
+
+        sections.push({
+          page,
+          text: instructions,
+          questions: countQuestions(`pg. ${page} #${instructions}`)
+        });
+      }
+
+      return sections;
+    }
+
+    function evaluate() {
+      const text = input.value.trim();
+
+      if (!text) {
+        output.textContent = "Paste your homework above first.";
+        return;
+      }
+
+      const sections = parseHomework(text);
+
+      if (!sections.length) {
+        output.textContent =
+          "I couldn't find any sections.\n\n" +
+          'Use a format like:\npg. 8 #13-25 odd, 34-36';
+        return;
+      }
+
+      const total = sections.reduce((sum, section) => sum + section.questions, 0);
+
+      const divider = "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -";
+
+      let result = `**${total} Questions**\n`;
+      result += `**${sections.length} Sections**\n\n`;
+      result += `**${divider}**\n`;
+
+      sections.forEach((section, index) => {
+        result += `**(PG. ${section.page} ${section.text}) - ${section.questions} Questions**\n`;
+        result += `**${divider}**`;
+
+        if (index < sections.length - 1) result += "\n";
+      });
+
+      output.textContent = result;
+    }
+
+    document.getElementById("evaluate").addEventListener("click", evaluate);
+
+    document.getElementById("clear").addEventListener("click", () => {
+      input.value = "";
+      output.textContent = "Your evaluated homework will appear here.";
+      input.focus();
+    });
+
+    input.addEventListener("keydown", event => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        evaluate();
+      }
+    });
+
+    // Put the example in the box initially.
+    input.value = `pg. 8 #13-25 odd, 34-36, 41-51 odd, 58-61;
+pg. 18 #11-33 odd, 37, 39-40;
+pg. 24 #1-21 odd, 22`;
+  </script>
+</body>
+</html>
